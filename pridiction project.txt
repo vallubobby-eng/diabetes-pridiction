@@ -1,0 +1,600 @@
+import os
+import time
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.model_selection import train_test_split
+
+# ---------------------------------------------------------
+# Page Configuration
+# ---------------------------------------------------------
+st.set_page_config(
+    page_title="DiaPredict AI • Precision Diabetes Intelligence",
+    page_icon="🩺",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+FEATURES = [
+    "Pregnancies", "Glucose", "BloodPressure", "SkinThickness",
+    "Insulin", "BMI", "DiabetesPedigreeFunction", "Age"
+]
+ZERO_AS_MISSING = ["Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"]
+
+# ---------------------------------------------------------
+# Custom Modern Animated CSS
+# ---------------------------------------------------------
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+* {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+@keyframes meshGradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 15px rgba(0, 212, 255, 0.25); }
+    50% { box-shadow: 0 0 30px rgba(0, 212, 255, 0.55); }
+}
+
+@keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    14% { transform: scale(1.18); }
+    28% { transform: scale(1); }
+    42% { transform: scale(1.14); }
+    70% { transform: scale(1); }
+}
+
+@keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Hero Section */
+.hero-container {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 35%, #0f766e 70%, #0369a1 100%);
+    background-size: 300% 300%;
+    animation: meshGradient 14s ease infinite;
+    padding: 38px 30px;
+    border-radius: 22px;
+    color: white;
+    box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    margin-bottom: 25px;
+}
+
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 6px 14px;
+    border-radius: 50px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.pulsing-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #38ef7d;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 10px #38ef7d;
+    animation: pulseGlow 2s infinite;
+}
+
+.hero-title {
+    font-size: 2.6rem;
+    font-weight: 800;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.heart-icon {
+    display: inline-block;
+    animation: heartbeat 1.5s infinite;
+}
+
+.hero-subtitle {
+    font-size: 1.05rem;
+    opacity: 0.88;
+    margin-top: 10px;
+    max-width: 680px;
+    font-weight: 400;
+}
+
+/* Result Banners */
+.result-banner {
+    padding: 26px;
+    border-radius: 18px;
+    color: white;
+    text-align: center;
+    margin-bottom: 24px;
+    animation: slideUpFade 0.6s ease both;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.result-safe {
+    background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
+    box-shadow: 0 16px 32px -8px rgba(16, 185, 129, 0.4);
+}
+
+.result-risk {
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 50%, #f87171 100%);
+    box-shadow: 0 16px 32px -8px rgba(239, 68, 68, 0.4);
+}
+
+.result-title {
+    font-size: 1.85rem;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+
+.result-desc {
+    font-size: 1.0rem;
+    opacity: 0.95;
+    margin: 0;
+}
+
+/* Metric Cards */
+.metric-box {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+    transition: transform 0.2s ease;
+}
+.metric-box:hover {
+    transform: translateY(-3px);
+}
+.metric-val {
+    font-size: 1.7rem;
+    font-weight: 700;
+    margin: 2px 0;
+}
+.metric-lbl {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+.metric-sub {
+    font-size: 0.78rem;
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.rec-card {
+    padding: 14px 18px;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    border-left: 4px solid #0284c7;
+    background: rgba(2, 132, 199, 0.08);
+}
+</style>
+
+<div class="hero-container">
+    <div class="hero-badge">
+        <span class="pulsing-dot"></span>
+        AI-Driven Clinical Risk Engine • Random Forest Ensemble
+    </div>
+    <h1 class="hero-title"><span class="heart-icon">🩺</span> DiaPredict AI</h1>
+    <p class="hero-subtitle">
+        State-of-the-art machine learning evaluation of metabolic indicators.
+        Instant risk assessment, biomarker comparative diagnostics, and personalized clinical guidance.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------
+# Data Loader and Model Training
+# ---------------------------------------------------------
+DATASET_URL = "https://raw.githubusercontent.com/plotly/datasets/master/diabetes.csv"
+
+@st.cache_data(show_spinner=False)
+def get_diabetes_data():
+    if os.path.exists("diabetes.csv"):
+        df = pd.read_csv("diabetes.csv")
+    else:
+        try:
+            df = pd.read_csv(DATASET_URL)
+        except Exception:
+            return None
+
+    df = df[FEATURES + ["Outcome"]].copy()
+    for col in ZERO_AS_MISSING:
+        df[col] = df[col].replace(0, np.nan)
+        df[col] = df[col].fillna(df[col].median())
+    return df
+
+
+@st.cache_resource(show_spinner=False)
+def build_model(df):
+    X = df[FEATURES]
+    y = df["Outcome"]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+    clf = RandomForestClassifier(n_estimators=350, max_depth=10, random_state=42)
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    cm = confusion_matrix(y_test, y_pred)
+    return clf, acc, cm
+
+
+df = get_diabetes_data()
+
+if df is None:
+    st.warning("⚠️ Could not locate diabetes dataset. Please upload `diabetes.csv` below.")
+    uploaded = st.file_uploader("Upload dataset", type=["csv"])
+    if uploaded is not None:
+        df = pd.read_csv(uploaded)
+        for col in ZERO_AS_MISSING:
+            df[col] = df[col].replace(0, np.nan)
+            df[col] = df[col].fillna(df[col].median())
+    else:
+        st.stop()
+
+model, accuracy, cm = build_model(df)
+medians = df[FEATURES].median()
+means = df[FEATURES].mean()
+diabetic_means = df[df["Outcome"] == 1][FEATURES].mean()
+healthy_means = df[df["Outcome"] == 0][FEATURES].mean()
+
+# ---------------------------------------------------------
+# Sidebar Controls & Presets
+# ---------------------------------------------------------
+st.sidebar.markdown("### 🎛️ Patient Quick Presets")
+
+defaults = {
+    "preg": 1,
+    "glu": 115,
+    "bp": 72,
+    "skin": 22,
+    "ins": 79,
+    "bmi": 26.4,
+    "dpf": 0.450,
+    "age": 33
+}
+
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+col_p1, col_p2 = st.sidebar.columns(2)
+if col_p1.button("🟢 Healthy", use_container_width=True):
+    st.session_state.preg = 1
+    st.session_state.glu = 92
+    st.session_state.bp = 70
+    st.session_state.skin = 18
+    st.session_state.ins = 60
+    st.session_state.bmi = 22.5
+    st.session_state.dpf = 0.250
+    st.session_state.age = 25
+    st.rerun()
+
+if col_p2.button("🔴 High Risk", use_container_width=True):
+    st.session_state.preg = 6
+    st.session_state.glu = 175
+    st.session_state.bp = 86
+    st.session_state.skin = 36
+    st.session_state.ins = 240
+    st.session_state.bmi = 38.2
+    st.session_state.dpf = 0.850
+    st.session_state.age = 52
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📋 Enter Patient Biomarkers")
+
+preg_val = st.sidebar.number_input("Pregnancies", 0, 20, value=int(st.session_state.preg), key="input_preg")
+glu_val = st.sidebar.slider("Glucose Level (mg/dL)", 40, 250, value=int(st.session_state.glu), key="input_glu")
+bp_val = st.sidebar.slider("Blood Pressure (mm Hg)", 40, 200, value=int(st.session_state.bp), key="input_bp")
+skin_val = st.sidebar.slider("Skin Thickness (mm)", 5, 100, value=int(st.session_state.skin), key="input_skin")
+ins_val = st.sidebar.slider("Serum Insulin (μU/mL)", 10, 900, value=int(st.session_state.ins), key="input_ins")
+bmi_val = st.sidebar.number_input("Body Mass Index (BMI)", 10.0, 70.0, value=float(st.session_state.bmi), step=0.1, key="input_bmi")
+dpf_val = st.sidebar.number_input("Diabetes Pedigree Function", 0.05, 3.0, value=float(st.session_state.dpf), step=0.01, format="%.3f", key="input_dpf")
+age_val = st.sidebar.number_input("Patient Age (Years)", 1, 110, value=int(st.session_state.age), key="input_age")
+
+predict_trigger = st.sidebar.button("⚡ Run Instant Diagnostic", type="primary", use_container_width=True)
+st.sidebar.caption(f"🛡️ Model: Random Forest Ensemble | Test Acc: **{accuracy:.1%}**")
+
+patient_dict = {
+    "Pregnancies": preg_val,
+    "Glucose": glu_val,
+    "BloodPressure": bp_val,
+    "SkinThickness": skin_val,
+    "Insulin": ins_val,
+    "BMI": bmi_val,
+    "DiabetesPedigreeFunction": dpf_val,
+    "Age": age_val
+}
+
+# ---------------------------------------------------------
+# Tabbed Interface Layout
+# ---------------------------------------------------------
+tab_diag, tab_analytics, tab_explain, tab_report = st.tabs([
+    "🩺 Diagnostic Engine",
+    "📊 Biomarker Comparison & Radar",
+    "🧠 Model Intelligence & Metrics",
+    "📄 Clinical Summary Report"
+])
+
+input_df = pd.DataFrame([patient_dict])
+for col in ZERO_AS_MISSING:
+    if input_df.at[0, col] == 0:
+        input_df.at[0, col] = medians[col]
+
+prob_diabetic = float(model.predict_proba(input_df)[0][1])
+is_diabetic = prob_diabetic >= 0.5
+
+# ---------------------------------------------------------
+# TAB 1: DIAGNOSTIC ENGINE
+# ---------------------------------------------------------
+with tab_diag:
+    if predict_trigger:
+        with st.spinner("Analyzing physiological markers..."):
+            time.sleep(0.4)
+
+    if is_diabetic:
+        st.markdown(f"""
+        <div class="result-banner result-risk">
+            <div class="result-title">⚠️ HIGH METABOLIC RISK DETECTED</div>
+            <p class="result-desc">The model indicates a <b>{prob_diabetic*100:.1f}% probability</b> consistent with Type 2 Diabetes patterns.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div class="result-banner result-safe">
+            <div class="result-title">✅ LOW RISK / HEALTHY PROFILE</div>
+            <p class="result-desc">The model indicates a <b>{(1 - prob_diabetic)*100:.1f}% probability</b> of healthy non-diabetic profile.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        glu_status = "⚠️ Elevated" if glu_val >= 126 else ("⚡ Borderline" if glu_val >= 100 else "✅ Normal")
+        glu_color = "#ef4444" if glu_val >= 126 else ("#f59e0b" if glu_val >= 100 else "#10b981")
+        st.markdown(f"""
+        <div class="metric-box">
+            <div class="metric-lbl">Fasting Glucose</div>
+            <div class="metric-val" style="color: {glu_color}">{glu_val} <span style="font-size: 0.9rem">mg/dL</span></div>
+            <div class="metric-sub" style="color: {glu_color}">{glu_status}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with m2:
+        bmi_status = "⚠️ Obese" if bmi_val >= 30 else ("⚡ Overweight" if bmi_val >= 25 else "✅ Normal")
+        bmi_color = "#ef4444" if bmi_val >= 30 else ("#f59e0b" if bmi_val >= 25 else "#10b981")
+        st.markdown(f"""
+        <div class="metric-box">
+            <div class="metric-lbl">Body Mass Index</div>
+            <div class="metric-val" style="color: {bmi_color}">{bmi_val:.1f}</div>
+            <div class="metric-sub" style="color: {bmi_color}">{bmi_status}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with m3:
+        bp_status = "⚠️ High (Stage 1+)" if bp_val >= 90 else ("⚡ Pre-Hypertension" if bp_val >= 80 else "✅ Optimal")
+        bp_color = "#ef4444" if bp_val >= 90 else ("#f59e0b" if bp_val >= 80 else "#10b981")
+        st.markdown(f"""
+        <div class="metric-box">
+            <div class="metric-lbl">Blood Pressure</div>
+            <div class="metric-val" style="color: {bp_color}">{bp_val} <span style="font-size: 0.9rem">mm Hg</span></div>
+            <div class="metric-sub" style="color: {bp_color}">{bp_status}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with m4:
+        risk_label = "CRITICAL" if prob_diabetic >= 0.75 else ("MODERATE" if prob_diabetic >= 0.4 else "LOW")
+        r_color = "#ef4444" if prob_diabetic >= 0.5 else "#10b981"
+        st.markdown(f"""
+        <div class="metric-box">
+            <div class="metric-lbl">Computed Risk Level</div>
+            <div class="metric-val" style="color: {r_color}">{prob_diabetic*100:.1f}%</div>
+            <div class="metric-sub" style="color: {r_color}">{risk_label} RISK</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_gauge, col_recs = st.columns([1, 1])
+    with col_gauge:
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=prob_diabetic * 100,
+            number={'suffix': "%", 'font': {'size': 38, 'color': '#0ea5e9'}},
+            title={'text': "<b>Risk Probability Index</b>", 'font': {'size': 18}},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "#ef4444" if is_diabetic else "#10b981", 'thickness': 0.3},
+                'steps': [
+                    {'range': [0, 35], 'color': 'rgba(16, 185, 129, 0.22)'},
+                    {'range': [35, 65], 'color': 'rgba(245, 158, 11, 0.22)'},
+                    {'range': [65, 100], 'color': 'rgba(239, 68, 68, 0.22)'}
+                ]
+            }
+        ))
+        fig_gauge.update_layout(height=340, margin=dict(l=30, r=30, t=50, b=20), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_gauge, use_container_width=True)
+
+    with col_recs:
+        st.markdown("### 💡 Clinical Insights & Guidance")
+        if glu_val >= 126:
+            st.markdown("""<div class="rec-card" style="border-left-color: #ef4444;">
+                <b>⚠️ Glucose Alert:</b> Fasting glucose is ≥ 126 mg/dL. Schedule a clinical HbA1c test and consult a doctor.
+            </div>""", unsafe_allow_html=True)
+        elif glu_val >= 100:
+            st.markdown("""<div class="rec-card" style="border-left-color: #f59e0b;">
+                <b>⚡ Pre-diabetes Warning:</b> Fasting glucose is 100–125 mg/dL. Low-glycemic dietary adjustments recommended.
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown("""<div class="rec-card" style="border-left-color: #10b981;">
+                <b>✅ Glucose Stability:</b> Fasting blood sugar is in the healthy reference range (< 100 mg/dL).
+            </div>""", unsafe_allow_html=True)
+
+        if bmi_val >= 25:
+            st.markdown("""<div class="rec-card" style="border-left-color: #f59e0b;">
+                <b>⚖️ Weight Management:</b> BMI is above 25. Regular physical activity enhances insulin sensitivity.
+            </div>""", unsafe_allow_html=True)
+
+        if dpf_val > 0.6:
+            st.markdown("""<div class="rec-card" style="border-left-color: #3b82f6;">
+                <b>🧬 Genetic History:</b> Elevated Pedigree Function (> 0.60). Annual metabolic screening is advised.
+            </div>""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# TAB 2: BIOMARKER COMPARISON & RADAR
+# ---------------------------------------------------------
+with tab_analytics:
+    st.markdown("### 🧬 Biometric Comparison Profile")
+    col_r1, col_r2 = st.columns([1, 1])
+
+    with col_r1:
+        radar_features = ["Glucose", "BloodPressure", "BMI", "Insulin", "Age"]
+        max_vals = df[radar_features].max()
+
+        patient_norm = [patient_dict[f] / max_vals[f] for f in radar_features]
+        healthy_norm = [healthy_means[f] / max_vals[f] for f in radar_features]
+        diabetic_norm = [diabetic_means[f] / max_vals[f] for f in radar_features]
+
+        fig_radar = go.Figure()
+        fig_radar.add_trace(go.Scatterpolar(
+            r=patient_norm + [patient_norm[0]],
+            theta=radar_features + [radar_features[0]],
+            fill='toself',
+            name='Current Patient',
+            line=dict(color='#0ea5e9', width=3),
+            fillcolor='rgba(14, 165, 233, 0.3)'
+        ))
+        fig_radar.add_trace(go.Scatterpolar(
+            r=healthy_norm + [healthy_norm[0]],
+            theta=radar_features + [radar_features[0]],
+            name='Healthy Benchmark',
+            line=dict(color='#10b981', dash='dash')
+        ))
+        fig_radar.add_trace(go.Scatterpolar(
+            r=diabetic_norm + [diabetic_norm[0]],
+            theta=radar_features + [radar_features[0]],
+            name='Diabetic Benchmark',
+            line=dict(color='#ef4444', dash='dot')
+        ))
+        fig_radar.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 1], showticklabels=False)),
+            title="<b>Biomarker Radar Map (Normalized)</b>",
+            height=380,
+            margin=dict(t=50, b=30, l=40, r=40)
+        )
+        st.plotly_chart(fig_radar, use_container_width=True)
+
+    with col_r2:
+        comp_df = pd.DataFrame({
+            "Biomarker": FEATURES,
+            "Patient": [patient_dict[f] for f in FEATURES],
+            "Dataset Average": [means[f] for f in FEATURES]
+        })
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(x=comp_df["Biomarker"], y=comp_df["Patient"], name="Patient", marker_color="#0284c7"))
+        fig_bar.add_trace(go.Bar(x=comp_df["Biomarker"], y=comp_df["Dataset Average"], name="Population Mean", marker_color="#a855f7"))
+        fig_bar.update_layout(barmode="group", height=380, title="<b>Patient vs Population Mean</b>", margin=dict(t=50, b=30, l=20, r=20))
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+# ---------------------------------------------------------
+# TAB 3: MODEL INTELLIGENCE & EXPLAINABILITY
+# ---------------------------------------------------------
+with tab_explain:
+    st.markdown("### 🧠 Random Forest Model Architecture")
+    col_fi, col_perf = st.columns([1, 1])
+
+    with col_fi:
+        importances = pd.Series(model.feature_importances_, index=FEATURES).sort_values(ascending=True)
+        fig_imp = px.bar(
+            x=importances.values,
+            y=importances.index,
+            orientation="h",
+            labels={"x": "Predictive Weight", "y": "Feature"},
+            color=importances.values,
+            color_continuous_scale="Blues",
+            title="<b>Feature Importance Hierarchy</b>"
+        )
+        fig_imp.update_layout(height=370, coloraxis_showscale=False, margin=dict(t=50, b=20, l=20, r=20))
+        st.plotly_chart(fig_imp, use_container_width=True)
+
+    with col_perf:
+        cm_df = pd.DataFrame(
+            cm,
+            index=["True Non-Diabetic", "True Diabetic"],
+            columns=["Predicted Non-Diabetic", "Predicted Diabetic"]
+        )
+        fig_cm = px.imshow(cm_df, text_auto=True, color_continuous_scale="Teal", title=f"<b>Confusion Matrix (Accuracy: {accuracy:.1%})</b>")
+        fig_cm.update_layout(height=370, margin=dict(t=50, b=20, l=20, r=20))
+        st.plotly_chart(fig_cm, use_container_width=True)
+
+# ---------------------------------------------------------
+# TAB 4: CLINICAL SUMMARY REPORT
+# ---------------------------------------------------------
+with tab_report:
+    st.markdown("### 📄 Diagnostic Lab Report Summary")
+
+    report_text = f"""==================================================================
+           DIAPREDICT AI CLINICAL ASSESSMENT REPORT
+==================================================================
+Date / Timestamp: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
+Model Engine:     Random Forest Classifier (350 Estimators)
+Validation Acc:   {accuracy:.1%}
+
+PATIENT BIOMETRIC PROFILE:
+------------------------------------------------------------------
+- Age:                          {age_val} years
+- Pregnancies:                  {preg_val}
+- Fasting Glucose:              {glu_val} mg/dL
+- Diastolic Blood Pressure:     {bp_val} mm Hg
+- Triceps Skinfold:             {skin_val} mm
+- 2-Hour Serum Insulin:         {ins_val} μU/mL
+- Body Mass Index (BMI):        {bmi_val:.1f}
+- Diabetes Pedigree Function:   {dpf_val:.3f}
+
+DIAGNOSTIC OUTCOME:
+------------------------------------------------------------------
+Calculated Probability:         {prob_diabetic*100:.1f}%
+Risk Classification:            {'HIGH RISK (LIKELY DIABETIC)' if is_diabetic else 'LOW RISK (NON-DIABETIC)'}
+
+PRIMARY CLINICAL REMARKS:
+------------------------------------------------------------------
+- Glucose Evaluation:           {'ELEVATED (>= 126 mg/dL)' if glu_val >= 126 else 'Within Standard Limits'}
+- Weight Class (BMI):           {'OBESE (>= 30)' if bmi_val >= 30 else ('OVERWEIGHT (>= 25)' if bmi_val >= 25 else 'Normal Weight')}
+- Blood Pressure Category:      {'HYPERTENSION RISK (>= 90)' if bp_val >= 90 else 'Acceptable'}
+=================================================================="""
+
+    st.text_area("Generated Patient Report", value=report_text, height=360)
+    st.download_button(
+        label="📥 Download Clinical Report (.txt)",
+        data=report_text,
+        file_name=f"diabetes_report_patient_{int(time.time())}.txt",
+        mime="text/plain",
+        use_container_width=True
+    )
+
+st.markdown("<br><hr>", unsafe_allow_html=True)
+st.caption("🩺 DiaPredict AI • Clinical Machine Learning Screening System • For Educational & Research Purposes Only.")
